@@ -1,0 +1,35 @@
+plugins:
+  - rubocop-minitest
+  - rubocop-performance
+  - rubocop-rake
+
+AllCops:
+  TargetRubyVersion: 3.1
+  NewCops: enable
+
+Layout/LineLength:
+  Max: 160
+
+Metrics/AbcSize:
+  Max: 40
+
+Metrics/ClassLength:
+  Max: 200
+
+Metrics/MethodLength:
+  Max: 40
+
+Minitest/MultipleAssertions:
+  Max: 10
+
+Naming/PredicateMethod:
+  AllowBangMethods: true
+
+Style/Documentation:
+  Enabled: false
+
+Style/HashSyntax:
+  EnforcedStyle: hash_rockets
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
