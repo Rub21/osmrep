@@ -18,15 +18,15 @@ module Osmrep
       @data = data
       @database = ENV.fetch("OSMREP_DATABASE", data["database"])
       @data_dir = ENV.fetch("OSMREP_DATA_DIR", data["data_dir"])
-      @limit = Integer(data.fetch("limit", DEFAULT_LIMIT))
       @sources = data.fetch("sources", nil) || {}
 
       raise Error, "database is not set" if @database.nil? || @database.empty?
       raise Error, "data_dir is not set" if @data_dir.nil? || @data_dir.empty?
     end
 
-    def limit(source = nil)
-      Integer(source_settings(source).fetch("limit", @limit))
+    # Rows per replication file for one source.
+    def limit(source)
+      Integer(source_settings(source).fetch("limit", DEFAULT_LIMIT))
     end
 
     # Directory of one source: its own data_dir when set, otherwise a

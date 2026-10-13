@@ -16,11 +16,10 @@ osmrep gpx dump -o gpx.osm.gz   # full dump
 ```yaml
 database: postgres://user:password@host/openstreetmap
 data_dir: /var/lib/osmrep
-limit: 10000        # rows per file
 aws_profile: osm-pds-upload       # optional, for the S3 upload
 sources:
   gpx:
-    limit: 1000     # overrides the default for one source
+    limit: 1000     # rows per file, default 10000
     data_dir: /store/planet/replication/gpx         # default: <data_dir>/<source>
     s3_dir: s3://osm-planet-eu-central-1/gpx/replication/minute   # optional
 ```
@@ -77,6 +76,19 @@ traces can be added later with one constant in the gpx source.
 The dump has the same format for every visible identifiable trace, plus
 `replication_sequence` on `<osm>`, so a consumer knows where to continue.
 
+
+## Why Ruby
+
+- The volume is small. A run writes a few thousand points, the worst case
+  after a bulk visibility change is a few million, and the `limit` keeps it
+  short. There is no performance reason for a compiled language here.
+- The dump is I/O bound. The time goes into reading rows from PostgreSQL
+  and writing gzip, both done in C by the `pg` and `zlib` libraries. Ruby
+  only turns rows into XML.
+- It matches the stack. openstreetmap-website and the changesets replication
+  are Ruby, so the people who maintain them can maintain this too.
+- The current GPS tools are C code without an active maintainer. A rewrite in
+  C++ would repeat that problem.
 
 ## Development
 
