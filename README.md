@@ -50,25 +50,23 @@ pending, no file is written.
 ```xml
 <osm version="0.6" generator="osmrep 0.1.0" timestamp="2026-10-13T17:01:21Z">
   <trace id="136" visible="true" visibility="identifiable" timestamp="2026-06-26T15:41:02Z"
-         uid="2" user="Rub21" lat="59.9473485" lon="10.7231631" points="1">
+         uid="2" user="Rub21" lat="59.9473485" lon="10.7231631" points="1204">
     <name>001241927.gpx</name>
     <description>test trace</description>
     <tag v="test"/>
-    <trk>
-      <trkseg>
-        <trkpt lat="59.9473485" lon="10.7231631">
-          <ele>182.2</ele>
-          <time>2012-05-24T13:27:54Z</time>
-        </trkpt>
-      </trkseg>
-    </trk>
+    <segment track="1" n="0" points="500" started_at="2012-05-24T13:27:54Z" ended_at="2012-05-24T13:36:12Z">LINESTRING ZM (10.7231631 59.9473485 182.2 1337866074,...)</segment>
+    <segment track="1" n="1" points="500" ...>LINESTRING ZM (...)</segment>
   </trace>
   <trace id="135" visible="false"/>
 </osm>
 ```
 
-Only identifiable traces carry their content: user, name, tags and points with
-timestamps. Any other trace is only a header, `<trace id="..." visible="true"
+The geometry comes from the `gpx_tracks` table
+([openstreetmap-website#7348](https://github.com/openstreetmap/openstreetmap-website/pull/7348)):
+one `<segment>` per row, WKT with Z = altitude and M = time in seconds,
+`-Infinity` when the point has no time. PostGIS reads it back with
+`ST_GeomFromText`. Only identifiable traces carry their content: user, name,
+tags and segments. Any other trace is only a header, `<trace id="..." visible="true"
 visibility="trackable"/>`, so a consumer can drop a trace that is no longer
 identifiable. A deleted trace is `<trace id="..." visible="false"/>`. Trackable
 traces can be added later with one constant in the gpx source.
@@ -76,6 +74,22 @@ traces can be added later with one constant in the gpx source.
 The dump has the same format for every visible identifiable trace, plus
 `replication_sequence` on `<osm>`, so a consumer knows where to continue.
 
+
+## Full dump like planetdump
+
+`script/gpx-dump` does what the planet server does for the map data:
+`pg_dump` of the gpx tables into one `.dmp` file, `pg_restore` into an empty
+scratch database, `osmrep gpx dump` against that database, then md5, a
+`gpx-planet-latest.osm.gz` link and an optional copy to S3. The production
+database is only read by `pg_dump`. Settings are environment variables, see the
+top of the script. In osm-dev:
+
+```
+make up OSMREP=1
+docker compose exec -e PGHOST=db -e PGUSER=postgres -e PGPASSWORD=... \
+  -e WORK_DIR=/tmp/gpxdump -e PLANET_DIR=/data/gps -e OSMREP_DATA_DIR=/data \
+  -e OSMREP="bundle exec bin/osmrep" osmrep bash script/gpx-dump
+```
 
 ## Why Ruby
 

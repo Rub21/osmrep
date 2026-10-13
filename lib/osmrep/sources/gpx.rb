@@ -2,19 +2,19 @@
 
 module Osmrep
   module Sources
-    # GPS traces, from the gpx_files, gpx_file_tags and gps_points tables.
+    # GPS traces, from the gpx_files, gpx_file_tags and gpx_tracks tables.
     #
     # Each trace is one <trace> element. Only identifiable traces carry their
-    # content: user, name, tags and points with timestamps. Every other trace
-    # is only a header with id, visible and visibility, so a consumer can
-    # drop a trace that is no longer identifiable. A deleted trace keeps its
-    # row with visible="false". Trackable traces may be added to
-    # CONTENT_VISIBILITIES later, once that is agreed.
+    # content: user, name, tags and the geometry. The geometry comes from
+    # gpx_tracks as one <segment> per row, WKT with Z = altitude and M = time
+    # in seconds (-Infinity when the point has no time), exactly as the table
+    # stores it. Every other trace is only a header with id, visible and
+    # visibility, so a consumer can drop a trace that is no longer identifiable.
+    # A deleted trace keeps its row with visible="false". Trackable traces may
+    # be added to CONTENT_VISIBILITIES later, once that is agreed.
     class Gpx
       TABLE = "gpx_files"
       COLUMNS = "id, user_id, visible, visibility, inserted, name, description, size, latitude, longitude, timestamp"
-      POINT_SCALE = 10_000_000.0
-
       # Visibilities whose content goes into the feed and the dump.
       CONTENT_VISIBILITIES = %w[identifiable].freeze
 
@@ -37,10 +37,10 @@ module Osmrep
         LIMIT $2
       SQL
 
-      POINTS_SQL = <<~SQL
-        SELECT trackid, latitude, longitude, altitude, timestamp
-        FROM gps_points WHERE gpx_id = $1
-        ORDER BY trackid, timestamp
+      SEGMENTS_SQL = <<~SQL
+        SELECT trackid, segment, ST_NPoints(geom) AS points, started_at, ended_at, ST_AsText(geom) AS wkt
+        FROM gpx_tracks WHERE gpx_id = $1
+        ORDER BY trackid, segment
       SQL
 
       def name
@@ -119,30 +119,16 @@ module Osmrep
           xml.name(row["name"])
           xml.description(row["description"])
           tags_for(conn, id).each { |tag| xml.tag("v" => tag) }
-          write_points(conn, xml, row)
+          write_segments(conn, xml, row)
         end
       end
 
-      def write_points(conn, xml, row)
-        points = conn.exec_params(POINTS_SQL, [row["id"]])
-
-        xml.trk do
-          points.each.chunk_while { |a, b| a["trackid"] == b["trackid"] }.each do |segment|
-            xml.trkseg do
-              segment.each { |point| write_point(xml, point) }
-            end
-          end
-        end
-      end
-
-      def write_point(xml, point)
-        attrs = {
-          "lat" => format("%.7f", Integer(point["latitude"]) / POINT_SCALE),
-          "lon" => format("%.7f", Integer(point["longitude"]) / POINT_SCALE)
-        }
-        xml.trkpt(attrs) do
-          xml.ele(point["altitude"]) if point["altitude"]
-          xml.time(Time.parse("#{point['timestamp']} UTC").iso8601) if point["timestamp"]
+      def write_segments(conn, xml, row)
+        conn.exec_params(SEGMENTS_SQL, [row["id"]]).each do |seg|
+          attrs = { "track" => seg["trackid"], "n" => seg["segment"], "points" => seg["points"] }
+          attrs["started_at"] = Time.parse("#{seg['started_at']} UTC").iso8601 if seg["started_at"]
+          attrs["ended_at"] = Time.parse("#{seg['ended_at']} UTC").iso8601 if seg["ended_at"]
+          xml.segment(seg["wkt"], attrs)
         end
       end
 
