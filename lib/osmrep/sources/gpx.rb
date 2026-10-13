@@ -5,10 +5,9 @@ module Osmrep
     # GPS traces, from the gpx_files, gpx_file_tags and gpx_tracks tables.
     #
     # Each trace is one <trace> element. Only identifiable traces carry their
-    # content: user, name, tags and the geometry. The geometry comes from
-    # gpx_tracks as one <segment> per row, WKT with Z = altitude and M = time
-    # in seconds (-Infinity when the point has no time), exactly as the table
-    # stores it. Every other trace is only a header with id, visible and
+    # content: user, name, tags and the points as GPX <trk><trkseg><trkpt>,
+    # like the trackpoints API. The points come from gpx_tracks, one <trkseg>
+    # per row, formatted by PostGIS. Every other trace is only a header with id, visible and
     # visibility, so a consumer can drop a trace that is no longer identifiable.
     # A deleted trace keeps its row with visible="false". Trackable traces may
     # be added to CONTENT_VISIBILITIES later, once that is agreed.
@@ -37,10 +36,24 @@ module Osmrep
         LIMIT $2
       SQL
 
+      # One row per gpx_tracks segment, with its points already formatted as
+      # GPX <trkpt> elements by PostGIS. Z is the altitude (0 when the point
+      # had none) and M the time in seconds (-Infinity when it had none).
       SEGMENTS_SQL = <<~SQL
-        SELECT trackid, segment, ST_NPoints(geom) AS points, started_at, ended_at, ST_AsText(geom) AS wkt
-        FROM gpx_tracks WHERE gpx_id = $1
-        ORDER BY trackid, segment
+        SELECT t.trackid, t.segment, count(*) AS points,
+               string_agg(
+                 format('<trkpt lat="%s" lon="%s">%s%s</trkpt>',
+                        round(ST_Y(p.geom)::numeric, 7), round(ST_X(p.geom)::numeric, 7),
+                        CASE WHEN ST_Z(p.geom) <> 0 THEN format('<ele>%s</ele>', ST_Z(p.geom)) ELSE '' END,
+                        CASE WHEN ST_M(p.geom) > '-infinity'::float
+                             THEN format('<time>%s</time>', to_char(to_timestamp(ST_M(p.geom)) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
+                             ELSE '' END),
+                 '' ORDER BY p.path) AS trkpts
+        FROM gpx_tracks t
+        CROSS JOIN LATERAL ST_DumpPoints(t.geom) AS p
+        WHERE t.gpx_id = $1
+        GROUP BY t.trackid, t.segment
+        ORDER BY t.trackid, t.segment
       SQL
 
       def name
@@ -119,16 +132,19 @@ module Osmrep
           xml.name(row["name"])
           xml.description(row["description"])
           tags_for(conn, id).each { |tag| xml.tag("v" => tag) }
-          write_segments(conn, xml, row)
+          write_tracks(conn, xml, row)
         end
       end
 
-      def write_segments(conn, xml, row)
-        conn.exec_params(SEGMENTS_SQL, [row["id"]]).each do |seg|
-          attrs = { "track" => seg["trackid"], "n" => seg["segment"], "points" => seg["points"] }
-          attrs["started_at"] = Time.parse("#{seg['started_at']} UTC").iso8601 if seg["started_at"]
-          attrs["ended_at"] = Time.parse("#{seg['ended_at']} UTC").iso8601 if seg["ended_at"]
-          xml.segment(seg["wkt"], attrs)
+      # GPX 1.1 layout: one <trk> per trackid, one <trkseg> per gpx_tracks row.
+      def write_tracks(conn, xml, row)
+        segments = conn.exec_params(SEGMENTS_SQL, [row["id"]])
+        segments.each.chunk_while { |a, b| a["trackid"] == b["trackid"] }.each do |track|
+          xml.trk do
+            track.each do |seg|
+              xml.trkseg { xml << seg["trkpts"] }
+            end
+          end
         end
       end
 

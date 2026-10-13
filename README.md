@@ -54,19 +54,23 @@ pending, no file is written.
     <name>001241927.gpx</name>
     <description>test trace</description>
     <tag v="test"/>
-    <segment track="1" n="0" points="500" started_at="2012-05-24T13:27:54Z" ended_at="2012-05-24T13:36:12Z">LINESTRING ZM (10.7231631 59.9473485 182.2 1337866074,...)</segment>
-    <segment track="1" n="1" points="500" ...>LINESTRING ZM (...)</segment>
+    <trk>
+      <trkseg>
+        <trkpt lat="59.9473485" lon="10.7231631"><ele>182.2</ele><time>2012-05-24T13:27:54Z</time></trkpt>
+        ...
+      </trkseg>
+    </trk>
   </trace>
   <trace id="135" visible="false"/>
 </osm>
 ```
 
-The geometry comes from the `gpx_tracks` table
-([openstreetmap-website#7348](https://github.com/openstreetmap/openstreetmap-website/pull/7348)):
-one `<segment>` per row, WKT with Z = altitude and M = time in seconds,
-`-Infinity` when the point has no time. PostGIS reads it back with
-`ST_GeomFromText`. Only identifiable traces carry their content: user, name,
-tags and segments. Any other trace is only a header, `<trace id="..." visible="true"
+The points use the same GPX layout as the trackpoints API. They come from the
+`gpx_tracks` table
+([openstreetmap-website#7348](https://github.com/openstreetmap/openstreetmap-website/pull/7348)),
+one `<trkseg>` per row, formatted by PostGIS so Ruby only copies the text.
+Only identifiable traces carry their content: user, name,
+tags and points. Any other trace is only a header, `<trace id="..." visible="true"
 visibility="trackable"/>`, so a consumer can drop a trace that is no longer
 identifiable. A deleted trace is `<trace id="..." visible="false"/>`. Trackable
 traces can be added later with one constant in the gpx source.

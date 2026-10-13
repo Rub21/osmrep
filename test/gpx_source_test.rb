@@ -15,8 +15,9 @@ class GpxSourceTest < Minitest::Test
       when /FROM gpx_file_tags/ then [{ "tag" => "bike" }]
       when /FROM users/ then [{ "display_name" => "ruben" }]
       when /FROM gpx_tracks/
-        [{ "trackid" => "1", "segment" => "0", "points" => "2", "started_at" => "2026-10-13 08:00:00", "ended_at" => "2026-10-13 08:00:05",
-           "wkt" => "LINESTRING ZM (-77.04 -12.05 10.5 1760342400,-77.0401 -12.0501 0 1760342405)" }]
+        [{ "trackid" => "1", "segment" => "0", "points" => "2",
+           "trkpts" => '<trkpt lat="-12.05" lon="-77.04"><ele>10.5</ele><time>2026-10-13T08:00:00Z</time></trkpt>' \
+                       '<trkpt lat="-12.0501" lon="-77.0401"><time>2026-10-13T08:00:05Z</time></trkpt>' }]
       end
     end
     out = +""
@@ -24,13 +25,14 @@ class GpxSourceTest < Minitest::Test
     out
   end
 
-  def test_identifiable_trace_has_user_tags_and_segments
+  def test_identifiable_trace_has_user_tags_and_points
     xml = render(TRACE)
 
     assert_includes xml, 'visibility="identifiable" timestamp="2026-10-13T09:00:00Z" uid="3" user="ruben"'
     assert_includes xml, '<tag v="bike"/>'
-    assert_includes xml, '<segment track="1" n="0" points="2" started_at="2026-10-13T08:00:00Z" ended_at="2026-10-13T08:00:05Z">'
-    assert_includes xml, "LINESTRING ZM (-77.04 -12.05 10.5 1760342400,-77.0401 -12.0501 0 1760342405)</segment>"
+    assert_includes xml, "<trk>"
+    assert_includes xml, "<trkseg>"
+    assert_includes xml, '<trkpt lat="-12.05" lon="-77.04"><ele>10.5</ele><time>2026-10-13T08:00:00Z</time></trkpt>'
   end
 
   def test_other_traces_are_only_a_header
