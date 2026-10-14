@@ -36,6 +36,11 @@ module Osmrep
           PRIMARY KEY (gpx_id, trackid)
         );
         CREATE INDEX IF NOT EXISTS trace_segments_geom_idx ON trace_segments USING gist (geom);
+        -- 2D copy for tile servers: ST_AsMVTGeom cannot clip ZM lines in PostGIS 3.6
+        -- ("mixed dimension geometries"), so Martin and friends read geom2d.
+        ALTER TABLE trace_segments ADD COLUMN IF NOT EXISTS geom2d geometry(Geometry, 4326)
+          GENERATED ALWAYS AS (ST_Force2D(geom)) STORED;
+        CREATE INDEX IF NOT EXISTS trace_segments_geom2d_idx ON trace_segments USING gist (geom2d);
 
         CREATE TABLE IF NOT EXISTS replication_state (
           id integer PRIMARY KEY DEFAULT 1 CHECK (id = 1),

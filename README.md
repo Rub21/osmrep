@@ -102,7 +102,7 @@ replication file, and writes it into a PostGIS database:
 ```
 traces(id, visibility, uid, "user", "timestamp", name, description, points, lat, lon)
 trace_tags(gpx_id, tag)
-trace_segments(gpx_id, trackid, geom geometry(GeometryZM, 4326))   -- one per <trkseg>, Z altitude, M time
+trace_segments(gpx_id, trackid, geom geometry(GeometryZM, 4326), geom2d)   -- one per <trkseg>, Z altitude, M time; geom2d for tile servers
 replication_state(sequence, "timestamp")
 ```
 
