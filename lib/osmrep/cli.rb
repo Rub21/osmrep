@@ -27,7 +27,7 @@ module Osmrep
       return usage unless source_name && command
 
       config = Config.load(@options[:config])
-      source = Sources.build(source_name)
+      source = Sources.build(source_name, config)
       execute(command, config, source)
     rescue Error, PG::Error => e
       warn "osmrep: #{e.message}"

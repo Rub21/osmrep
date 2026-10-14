@@ -37,6 +37,13 @@ module Osmrep
       source_settings(source).fetch("data_dir", File.join(@data_dir, source.to_s))
     end
 
+    # Visibilities whose content (points, and for identifiable the user and
+    # name) goes into the feed and the dump of one source. The others are
+    # written as a header only.
+    def content_visibilities(source)
+      Array(source_settings(source).fetch("content_visibilities", Sources::Gpx::DEFAULT_CONTENT_VISIBILITIES)).map(&:to_s)
+    end
+
     # S3 target of one source, nil when the files stay on disk only.
     def s3_dir(source)
       source_settings(source)["s3_dir"]

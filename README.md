@@ -68,12 +68,27 @@ pending, no file is written.
 The points use the same GPX layout as the trackpoints API. They come from the
 `gpx_tracks` table
 ([openstreetmap-website#7348](https://github.com/openstreetmap/openstreetmap-website/pull/7348)),
-one `<trkseg>` per row, formatted by PostGIS so Ruby only copies the text.
-Only identifiable traces carry their content: user, name,
-tags and points. Any other trace is only a header, `<trace id="..." visible="true"
-visibility="trackable"/>`, so a consumer can drop a trace that is no longer
-identifiable. A deleted trace is `<trace id="..." visible="false"/>`. Trackable
-traces can be added later with one constant in the gpx source.
+formatted by PostGIS so Ruby only copies the text. The layout is the one of
+the trackpoints API: one `<trk>` per trace and one `<trkseg>` per `trackid`,
+which is a `<trkseg>` of the uploaded file. The rows of `gpx_tracks` (a track
+is cut every 500 points) are joined, so the cut is not visible.
+Which traces carry their points is set by `content_visibilities` in the
+config, default `[identifiable, trackable]`. An identifiable trace also
+carries the user, the upload date, the name, the description and the tags.
+A trackable trace carries only the points with their times, no user data:
+
+```xml
+  <trace id="42" visible="true" visibility="trackable" lat="52.51" lon="13.37" points="791">
+    <trk><trkseg><trkpt lat="52.5100000" lon="13.3700000"><time>2022-05-12T02:39:37Z</time></trkpt>...</trkseg></trk>
+  </trace>
+```
+
+With `content_visibilities: [identifiable]` a trackable trace is only a
+header, `<trace id="42" visible="true" visibility="trackable"/>`. Private and
+public traces are always a header. A deleted trace is
+`<trace id="42" visible="false"/>`. The rule for a consumer is the same in
+every case: a `<trace>` with `<trk>` replaces what it has, a `<trace>` without
+`<trk>` deletes it.
 
 The dump has the same format for every visible identifiable trace, plus
 `replication_sequence` on `<osm>`, so a consumer knows where to continue.

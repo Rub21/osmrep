@@ -4,18 +4,30 @@ module Osmrep
   module Sources
     # GPS traces, from the gpx_files, gpx_file_tags and gpx_tracks tables.
     #
-    # Each trace is one <trace> element. Only identifiable traces carry their
-    # content: user, name, tags and the points as GPX <trk><trkseg><trkpt>,
-    # like the trackpoints API. The points come from gpx_tracks, one <trkseg>
-    # per row, formatted by PostGIS. Every other trace is only a header with id, visible and
-    # visibility, so a consumer can drop a trace that is no longer identifiable.
-    # A deleted trace keeps its row with visible="false". Trackable traces may
-    # be added to CONTENT_VISIBILITIES later, once that is agreed.
+    # Each trace is one <trace> element. The traces whose visibility is in
+    # content_visibilities carry their points as GPX <trk><trkseg><trkpt>,
+    # like the trackpoints API. An identifiable trace also carries the user,
+    # the upload date, the name, the description and the tags. A trackable
+    # trace carries only the points, with their times, and no user data.
+    # The points come from gpx_tracks, one <trkseg> per row, formatted by
+    # PostGIS. Every other trace is only a header with id, visible and
+    # visibility, so a consumer can drop a trace that is no longer served.
+    # A deleted trace keeps its row with visible="false".
     class Gpx
       TABLE = "gpx_files"
       COLUMNS = "id, user_id, visible, visibility, inserted, name, description, size, latitude, longitude, timestamp"
-      # Visibilities whose content goes into the feed and the dump.
-      CONTENT_VISIBILITIES = %w[identifiable].freeze
+      # Visibilities that may carry content. Private and public never do.
+      ALLOWED_CONTENT_VISIBILITIES = %w[identifiable trackable].freeze
+      DEFAULT_CONTENT_VISIBILITIES = ALLOWED_CONTENT_VISIBILITIES
+
+      attr_reader :content_visibilities
+
+      def initialize(content_visibilities: DEFAULT_CONTENT_VISIBILITIES)
+        unknown = content_visibilities - ALLOWED_CONTENT_VISIBILITIES
+        raise Error, "content_visibilities can only have #{ALLOWED_CONTENT_VISIBILITIES.join(', ')}, not #{unknown.join(', ')}" unless unknown.empty?
+
+        @content_visibilities = content_visibilities.freeze
+      end
 
       CLAIM_SQL = <<~SQL.freeze
         UPDATE #{TABLE} SET replicated = true
@@ -83,7 +95,7 @@ module Osmrep
         xml.osm(root_attributes(timestamp).merge("replication_sequence" => sequence)) do
           last_id = 0
           loop do
-            rows = conn.exec_params(DUMP_SQL, [last_id, batch, pg_array(CONTENT_VISIBILITIES)]).to_a
+            rows = conn.exec_params(DUMP_SQL, [last_id, batch, pg_array(content_visibilities)]).to_a
             break if rows.empty?
 
             rows.each { |row| write_trace(conn, xml, row) }
@@ -108,42 +120,53 @@ module Osmrep
       end
 
       def write_trace(conn, xml, row)
-        id = Integer(row["id"])
-        visible = pg_true?(row["visible"])
-        attrs = { "id" => id, "visible" => visible ? "true" : "false" }
+        return write_header(xml, row) unless content?(row)
 
-        unless visible && pg_true?(row["inserted"]) && content?(row)
-          attrs["visibility"] = row["visibility"] if visible
-          xml.trace(attrs)
-          return
-        end
-
-        attrs.merge!(
-          "visibility" => row["visibility"],
-          "timestamp" => Time.parse("#{row['timestamp']} UTC").iso8601,
-          "uid" => Integer(row["user_id"]),
-          "user" => user_name(conn, row["user_id"]),
-          "lat" => row["latitude"],
-          "lon" => row["longitude"],
-          "points" => row["size"]
-        )
+        identifiable = row["visibility"] == "identifiable"
+        attrs = { "id" => Integer(row["id"]), "visible" => "true", "visibility" => row["visibility"] }
+        attrs.merge!(user_attributes(conn, row)) if identifiable
+        attrs.merge!("lat" => row["latitude"], "lon" => row["longitude"], "points" => row["size"])
 
         xml.trace(attrs) do
-          xml.name(row["name"])
-          xml.description(row["description"])
-          tags_for(conn, id).each { |tag| xml.tag("v" => tag) }
+          write_details(conn, xml, row) if identifiable
           write_tracks(conn, xml, row)
         end
       end
 
-      # GPX 1.1 layout: one <trk> per trackid, one <trkseg> per gpx_tracks row.
+      # A trace without content: deleted, not imported yet, or with a
+      # visibility that is not in content_visibilities.
+      def write_header(xml, row)
+        attrs = { "id" => Integer(row["id"]), "visible" => pg_true?(row["visible"]) ? "true" : "false" }
+        attrs["visibility"] = row["visibility"] if pg_true?(row["visible"])
+        xml.trace(attrs)
+      end
+
+      # Upload date and user, only for identifiable traces.
+      def user_attributes(conn, row)
+        {
+          "timestamp" => Time.parse("#{row['timestamp']} UTC").iso8601,
+          "uid" => Integer(row["user_id"]),
+          "user" => user_name(conn, row["user_id"])
+        }
+      end
+
+      # Name, description and tags, only for identifiable traces.
+      def write_details(conn, xml, row)
+        xml.name(row["name"])
+        xml.description(row["description"])
+        tags_for(conn, Integer(row["id"])).each { |tag| xml.tag("v" => tag) }
+      end
+
+      # GPX layout, the same as the trackpoints API: one <trk> per trace and
+      # one <trkseg> per trackid, which is a <trkseg> of the uploaded file.
+      # A trackid can be stored in several gpx_tracks rows (a long track is
+      # cut every 500 points); they are joined here in segment order, so the
+      # cut is not visible in the output.
       def write_tracks(conn, xml, row)
         segments = conn.exec_params(SEGMENTS_SQL, [row["id"]])
-        segments.each.chunk_while { |a, b| a["trackid"] == b["trackid"] }.each do |track|
-          xml.trk do
-            track.each do |seg|
-              xml.trkseg { xml << seg["trkpts"] }
-            end
+        xml.trk do
+          segments.each.chunk_while { |a, b| a["trackid"] == b["trackid"] }.each do |track|
+            xml.trkseg { track.each { |seg| xml << seg["trkpts"] } }
           end
         end
       end
@@ -157,7 +180,7 @@ module Osmrep
       end
 
       def content?(row)
-        CONTENT_VISIBILITIES.include?(row["visibility"])
+        pg_true?(row["visible"]) && pg_true?(row["inserted"]) && content_visibilities.include?(row["visibility"])
       end
 
       def pg_array(values)
