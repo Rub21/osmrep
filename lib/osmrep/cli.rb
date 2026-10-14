@@ -46,7 +46,7 @@ module Osmrep
         upload = s3_upload(config, source.name, logger)
         Replicator.new(:source => source, :dir => dir, :limit => config.limit(source.name), :logger => logger, :upload => upload).run(conn)
       when "dump"
-        output = @options[:output] || File.join(config.data_dir, "#{source.name}-#{Time.now.utc.strftime('%Y%m%d')}.osm.gz")
+        output = @options[:output] || File.join(config.data_dir, "#{source.name}-#{Time.now.utc.strftime('%Y%m%d')}.osm.bz2")
         Dumper.new(:source => source, :dir => dir, :logger => logger).run(conn, output)
       else
         return usage("unknown command #{command.inspect}")
@@ -60,7 +60,7 @@ module Osmrep
       @parser ||= OptionParser.new do |o|
         o.banner = USAGE
         o.on("-c", "--config PATH", "config file (default: config.yaml or $OSMREP_CONFIG)") { |v| @options[:config] = v }
-        o.on("-o", "--output PATH", "output file for dump") { |v| @options[:output] = v }
+        o.on("-o", "--output PATH", "output file for dump, .bz2, .gz or plain XML by extension") { |v| @options[:output] = v }
         o.on("-q", "--quiet", "no log output") { @options[:quiet] = true }
         o.on("-v", "--version") do
           puts Osmrep::VERSION

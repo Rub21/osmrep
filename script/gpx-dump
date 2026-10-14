@@ -6,6 +6,8 @@
 # 3. osmrep gpx dump reads the scratch database and writes the XML
 # 4. md5, "latest" link and optional copy to S3, like planet-notes-dump
 #
+# The dump is .osm.bz2 like the planet and notes dumps (pbzip2 when installed).
+#
 # The production database is only touched in step 1. Settings come from the
 # environment, the defaults are the paths used on the planet server.
 set -euo pipefail
@@ -24,7 +26,7 @@ OSMREP_DATA_DIR="${OSMREP_DATA_DIR:-/store/planet/replication}"  # to record the
 
 year=$(date +%Y)
 date=$(date +%y%m%d)
-name="gpx-planet-${date}.osm.gz"
+name="gpx-planet-${date}.osm.bz2"
 dump_file="${WORK_DIR}/gpx.dmp"
 lock=/tmp/gpx-dump.lock
 
@@ -67,8 +69,8 @@ md5sum "$name" > "${name}.md5"
 
 echo "==> 4/4 publish"
 cd "$PLANET_DIR"
-ln -fs "${year}/${name}" gpx-planet-latest.osm.gz
-sed -e "s/${name}/gpx-planet-latest.osm.gz/" "${year}/${name}.md5" > gpx-planet-latest.osm.gz.md5
+ln -fs "${year}/${name}" gpx-planet-latest.osm.bz2
+sed -e "s/${name}/gpx-planet-latest.osm.bz2/" "${year}/${name}.md5" > gpx-planet-latest.osm.bz2.md5
 if [[ -n "$S3_DIR" ]]; then
   "$AWS" --profile "$AWS_PROFILE_NAME" s3 cp --storage-class INTELLIGENT_TIERING --no-progress "${year}/${name}.md5" "${S3_DIR}/${year}/${name}.md5"
   "$AWS" --profile "$AWS_PROFILE_NAME" s3 cp --storage-class INTELLIGENT_TIERING --no-progress "${year}/${name}" "${S3_DIR}/${year}/${name}"

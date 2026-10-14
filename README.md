@@ -8,7 +8,7 @@ with GPS traces and can be extended to other tables.
 
 ```
 osmrep gpx replicate            # one run, for a cron or systemd timer
-osmrep gpx dump -o gpx.osm.gz   # full dump
+osmrep gpx dump -o gpx.osm.bz2  # full dump (.bz2, .gz or plain XML by extension)
 ```
 
 `config.yaml`:
@@ -84,7 +84,9 @@ The dump has the same format for every visible identifiable trace, plus
 `script/gpx-dump` does what the planet server does for the map data:
 `pg_dump` of the gpx tables into one `.dmp` file, `pg_restore` into an empty
 scratch database, `osmrep gpx dump` against that database, then md5, a
-`gpx-planet-latest.osm.gz` link and an optional copy to S3. The production
+`gpx-planet-latest.osm.bz2` link and an optional copy to S3. The dump is
+`.osm.bz2` like the planet and notes dumps, with `pbzip2` when it is installed.
+The replication files stay `.osm.gz` like the changesets feed. The production
 database is only read by `pg_dump`. Settings are environment variables, see the
 top of the script. In osm-dev:
 
