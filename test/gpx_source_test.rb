@@ -18,12 +18,12 @@ class GpxSourceTest < Minitest::Test
         # trackid 1 is stored in two rows (a long track is cut every 500
         # points), trackid 2 in one
         [{ "trackid" => "1", "segment" => "0", "points" => "2",
-           "trkpts" => '<trkpt lat="-12.05" lon="-77.04"><ele>10.5</ele><time>2026-10-13T08:00:00Z</time></trkpt>' \
-                       '<trkpt lat="-12.0501" lon="-77.0401"><time>2026-10-13T08:00:05Z</time></trkpt>' },
+           "trkpts" => "        <trkpt lat=\"-12.05\" lon=\"-77.04\"><ele>10.5</ele><time>2026-10-13T08:00:00Z</time></trkpt>\n        " \
+                       "<trkpt lat=\"-12.0501\" lon=\"-77.0401\"><time>2026-10-13T08:00:05Z</time></trkpt>" },
          { "trackid" => "1", "segment" => "1", "points" => "1",
-           "trkpts" => '<trkpt lat="-12.0502" lon="-77.0402"><time>2026-10-13T08:00:10Z</time></trkpt>' },
+           "trkpts" => "        <trkpt lat=\"-12.0502\" lon=\"-77.0402\"><time>2026-10-13T08:00:10Z</time></trkpt>" },
          { "trackid" => "2", "segment" => "0", "points" => "1",
-           "trkpts" => '<trkpt lat="-12.06" lon="-77.05"><time>2026-10-13T08:10:00Z</time></trkpt>' }]
+           "trkpts" => "        <trkpt lat=\"-12.06\" lon=\"-77.05\"><time>2026-10-13T08:10:00Z</time></trkpt>" }]
       end
     end
     out = +""
@@ -49,8 +49,8 @@ class GpxSourceTest < Minitest::Test
 
     assert_equal 1, xml.scan("<trk>").size
     assert_equal 2, xml.scan("<trkseg>").size
-    assert_includes xml, '<time>2026-10-13T08:00:05Z</time></trkpt><trkpt lat="-12.0502" lon="-77.0402">'
-    assert_includes xml, "</trkseg>\n      <trkseg>\n<trkpt lat=\"-12.06\""
+    assert_includes xml, "<time>2026-10-13T08:00:05Z</time></trkpt>\n        <trkpt lat=\"-12.0502\" lon=\"-77.0402\">"
+    assert_includes xml, "</trkseg>\n      <trkseg>\n        <trkpt lat=\"-12.06\""
   end
 
   def test_trackable_trace_has_points_but_no_user_name_or_date

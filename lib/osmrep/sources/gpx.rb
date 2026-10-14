@@ -49,18 +49,19 @@ module Osmrep
       SQL
 
       # One row per gpx_tracks segment, with its points already formatted as
-      # GPX <trkpt> elements by PostGIS. Z is the altitude (0 when the point
-      # had none) and M the time in seconds (-Infinity when it had none).
+      # GPX <trkpt> elements by PostGIS, one per line and indented to match
+      # the builder output. Z is the altitude (0 when the point had none) and
+      # M the time in seconds (-Infinity when it had none).
       SEGMENTS_SQL = <<~SQL
         SELECT t.trackid, t.segment, count(*) AS points,
                string_agg(
-                 format('<trkpt lat="%s" lon="%s">%s%s</trkpt>',
+                 format('        <trkpt lat="%s" lon="%s">%s%s</trkpt>',
                         round(ST_Y(p.geom)::numeric, 7), round(ST_X(p.geom)::numeric, 7),
                         CASE WHEN ST_Z(p.geom) <> 0 THEN format('<ele>%s</ele>', ST_Z(p.geom)) ELSE '' END,
                         CASE WHEN ST_M(p.geom) > '-infinity'::float
                              THEN format('<time>%s</time>', to_char(to_timestamp(ST_M(p.geom)) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
                              ELSE '' END),
-                 '' ORDER BY p.path) AS trkpts
+                 E'\\n' ORDER BY p.path) AS trkpts
         FROM gpx_tracks t
         CROSS JOIN LATERAL ST_DumpPoints(t.geom) AS p
         WHERE t.gpx_id = $1
@@ -166,7 +167,7 @@ module Osmrep
         segments = conn.exec_params(SEGMENTS_SQL, [row["id"]])
         xml.trk do
           segments.each.chunk_while { |a, b| a["trackid"] == b["trackid"] }.each do |track|
-            xml.trkseg { track.each { |seg| xml << seg["trkpts"] } }
+            xml.trkseg { track.each { |seg| xml << "#{seg['trkpts']}\n" } }
           end
         end
       end
