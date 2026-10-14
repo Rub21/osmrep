@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 module Osmrep
-  # Settings read from the YAML config file. The top level has the defaults,
-  # the sources section overrides them for one source. Environment variables
+  # Settings read from the YAML config file: database, data_dir and the S3
+  # settings at the top level, the rest per source. Environment variables
   # OSMREP_DATABASE and OSMREP_DATA_DIR override the file.
   class Config
     DEFAULT_LIMIT = 10_000
@@ -29,19 +29,18 @@ module Osmrep
       Integer(source_settings(source).fetch("limit", DEFAULT_LIMIT))
     end
 
-    # Directory of one source: its own data_dir when set, otherwise a
-    # subdirectory of the top level data_dir named after the source.
+    # The base directory, or the subdirectory of one source, named after it.
     def data_dir(source = nil)
       return @data_dir if source.nil?
 
-      source_settings(source).fetch("data_dir", File.join(@data_dir, source.to_s))
+      File.join(@data_dir, source.to_s)
     end
 
     # Visibilities whose content (points, and for identifiable the user and
     # name) goes into the feed and the dump of one source. The others are
     # written as a header only.
     def content_visibilities(source)
-      Array(source_settings(source).fetch("content_visibilities", Sources::Gpx::DEFAULT_CONTENT_VISIBILITIES)).map(&:to_s)
+      Array(source_settings(source).fetch("content_visibilities", Sources::Gpx::ALLOWED_CONTENT_VISIBILITIES)).map(&:to_s)
     end
 
     # S3 target of one source, nil when the files stay on disk only.
@@ -49,12 +48,12 @@ module Osmrep
       source_settings(source)["s3_dir"]
     end
 
-    def aws_profile(source = nil)
-      source_settings(source).fetch("aws_profile", @data.fetch("aws_profile", nil))
+    def aws_profile
+      @data.fetch("aws_profile", nil)
     end
 
-    def aws_cli(source = nil)
-      source_settings(source).fetch("aws_cli", @data.fetch("aws_cli", "aws"))
+    def aws_cli
+      @data.fetch("aws_cli", "aws")
     end
 
     private

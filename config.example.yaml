@@ -21,5 +21,4 @@ sources:
     # traces also carry user, date, name and tags; trackable only the points.
     # Private and public traces never carry content. Default: both.
     content_visibilities: [identifiable, trackable]
-    data_dir: /store/planet/replication/gpx
     s3_dir: s3://osm-planet-eu-central-1/gpx/replication/minute

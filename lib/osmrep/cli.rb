@@ -73,7 +73,7 @@ module Osmrep
       s3_dir = config.s3_dir(name)
       return nil unless s3_dir
 
-      S3Upload.new(:s3_dir => s3_dir, :profile => config.aws_profile(name), :aws_cli => config.aws_cli(name), :logger => logger)
+      S3Upload.new(:s3_dir => s3_dir, :profile => config.aws_profile, :aws_cli => config.aws_cli, :logger => logger)
     end
 
     def usage(message = nil)

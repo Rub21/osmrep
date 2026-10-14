@@ -14,10 +14,8 @@ module Osmrep
       REGISTRY.keys
     end
 
-    def self.build(name, config = nil)
+    def self.build(name, config)
       klass = REGISTRY[name] or raise Error, "unknown source #{name.inspect}, expected one of #{names.join(', ')}"
-      return klass.new if config.nil?
-
       klass.new(:content_visibilities => config.content_visibilities(name))
     end
   end

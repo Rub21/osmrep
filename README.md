@@ -4,32 +4,39 @@ Replication feeds and dumps for OpenStreetMap tables that
 [osmdbt](https://github.com/openstreetmap/osmdbt) does not cover. It starts
 with GPS traces and can be extended to other tables.
 
-## Usage
+## Commands
 
 ```
-osmrep gpx replicate            # one run, for a cron or systemd timer
-osmrep gpx dump -o gpx.osm.bz2  # full dump (.bz2, .gz or plain XML by extension)
+osmrep gpx replicate               # one run: writes the pending traces as one replication file
+osmrep gpx dump -o gpx.osm.bz2     # full dump of the traces (.bz2, .gz or plain XML by extension)
 ```
+
+Options: `-c PATH` config file, default `config.yaml` in the current directory
+or `$OSMREP_CONFIG`. `-q` no log. `-v` version.
+
+## Config
 
 `config.yaml`:
 
 ```yaml
 database: postgres://user:password@host/openstreetmap
-data_dir: /var/lib/osmrep
-aws_profile: osm-pds-upload       # optional, for the S3 upload
+data_dir: /var/lib/osmrep           # files go to <data_dir>/gpx/
+aws_profile: osm-pds-upload         # optional, for the S3 upload
 sources:
   gpx:
-    limit: 1000     # rows per file, default 10000
-    data_dir: /store/planet/replication/gpx         # default: <data_dir>/<source>
+    limit: 1000                                   # rows per file, default 10000
+    content_visibilities: [identifiable, trackable]   # traces that carry their points, default both
     s3_dir: s3://osm-planet-eu-central-1/gpx/replication/minute   # optional
 ```
 
-With `s3_dir` set, each run copies the new file, its state file and `state.txt`
-to S3 with `aws s3 cp`, the same way the minutely and changesets feeds do.
+`OSMREP_DATABASE` and `OSMREP_DATA_DIR` override the file. With `s3_dir` set,
+each run copies the new file, its state file and `state.txt` to S3 with
+`aws s3 cp`, like the minutely and changesets feeds.
 
-## How a run works
+## Minute replication
 
-One database transaction:
+`osmrep gpx replicate` is one run. On a server a systemd timer calls it every
+minute, like `replicate-changesets`. Each run is one database transaction:
 
 1. `UPDATE gpx_files SET replicated = true WHERE id IN (... WHERE NOT replicated LIMIT n FOR UPDATE) RETURNING ...`
 2. Write the file and `state.txt`, fsync, rename into place.
@@ -39,7 +46,7 @@ If the process dies before the commit, the flags roll back and the rows go
 into the next file. Duplicates are possible, lost rows are not. When nothing is
 pending, no file is written.
 
-## Output
+Output, same layout as `planet.osm.org/replication/`:
 
 ```
 <data_dir>/gpx/state.txt
@@ -61,56 +68,31 @@ pending, no file is written.
       </trkseg>
     </trk>
   </trace>
+  <trace id="42" visible="true" visibility="trackable" lat="52.51" lon="13.37" points="791">
+    <trk><trkseg><trkpt lat="52.5100000" lon="13.3700000"><time>2022-05-12T02:39:37Z</time></trkpt>...</trkseg></trk>
+  </trace>
   <trace id="135" visible="false"/>
 </osm>
 ```
 
-The points use the same GPX layout as the trackpoints API. They come from the
-`gpx_tracks` table
+Each `<trace>` is one row of `gpx_files`. The points come from `gpx_tracks`
 ([openstreetmap-website#7348](https://github.com/openstreetmap/openstreetmap-website/pull/7348)),
-formatted by PostGIS so Ruby only copies the text. The layout is the one of
-the trackpoints API: one `<trk>` per trace and one `<trkseg>` per `trackid`,
-which is a `<trkseg>` of the uploaded file. The rows of `gpx_tracks` (a track
-is cut every 500 points) are joined, so the cut is not visible.
-Which traces carry their points is set by `content_visibilities` in the
-config, default `[identifiable, trackable]`. An identifiable trace also
-carries the user, the upload date, the name, the description and the tags.
-A trackable trace carries only the points with their times, no user data:
+in the same GPX layout as the trackpoints API.
 
-```xml
-  <trace id="42" visible="true" visibility="trackable" lat="52.51" lon="13.37" points="791">
-    <trk><trkseg><trkpt lat="52.5100000" lon="13.3700000"><time>2022-05-12T02:39:37Z</time></trkpt>...</trkseg></trk>
-  </trace>
-```
-
-With `content_visibilities: [identifiable]` a trackable trace is only a
-header, `<trace id="42" visible="true" visibility="trackable"/>`. Private and
-public traces are always a header. A deleted trace is
-`<trace id="42" visible="false"/>`. The rule for a consumer is the same in
-every case: a `<trace>` with `<trk>` replaces what it has, a `<trace>` without
-`<trk>` deletes it.
-
-The dump has the same format for every visible identifiable trace, plus
-`replication_sequence` on `<osm>`, so a consumer knows where to continue.
+- identifiable: user, date, name, description, tags and points
+- trackable: points only
 
 
-## Full dump like planetdump
-
-`script/gpx-dump` does what the planet server does for the map data:
-`pg_dump` of the gpx tables into one `.dmp` file, `pg_restore` into an empty
-scratch database, `osmrep gpx dump` against that database, then md5, a
-`gpx-planet-latest.osm.bz2` link and an optional copy to S3. The dump is
-`.osm.bz2` like the planet and notes dumps, with `pbzip2` when it is installed.
-The replication files stay `.osm.gz` like the changesets feed. The production
-database is only read by `pg_dump`. Settings are environment variables, see the
-top of the script. In osm-dev:
+## Full dump
 
 ```
-make up OSMREP=1
-docker compose exec -e PGHOST=db -e PGUSER=postgres -e PGPASSWORD=... \
-  -e WORK_DIR=/tmp/gpxdump -e PLANET_DIR=/data/gps -e OSMREP_DATA_DIR=/data \
-  -e OSMREP="bundle exec bin/osmrep" osmrep bash script/gpx-dump
+osmrep gpx dump -o gpx-planet-251014.osm.bz2
 ```
+
+Same format as the feed, plus `replication_sequence` on `<osm>` so a consumer
+knows where to continue. `.osm.bz2` like the planet and notes dumps, with
+`pbzip2` when installed. md5, `latest` link and the copy to S3 are the job of
+the script that calls it, like `planet-notes-dump`.
 
 ## Why Ruby
 

@@ -16,13 +16,13 @@ module Osmrep
     class Gpx
       TABLE = "gpx_files"
       COLUMNS = "id, user_id, visible, visibility, inserted, name, description, size, latitude, longitude, timestamp"
-      # Visibilities that may carry content. Private and public never do.
+      # Visibilities that may carry content, and the default. Private and
+      # public never do.
       ALLOWED_CONTENT_VISIBILITIES = %w[identifiable trackable].freeze
-      DEFAULT_CONTENT_VISIBILITIES = ALLOWED_CONTENT_VISIBILITIES
 
       attr_reader :content_visibilities
 
-      def initialize(content_visibilities: DEFAULT_CONTENT_VISIBILITIES)
+      def initialize(content_visibilities: ALLOWED_CONTENT_VISIBILITIES)
         unknown = content_visibilities - ALLOWED_CONTENT_VISIBILITIES
         raise Error, "content_visibilities can only have #{ALLOWED_CONTENT_VISIBILITIES.join(', ')}, not #{unknown.join(', ')}" unless unknown.empty?
 
