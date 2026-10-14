@@ -19,6 +19,25 @@ class FakeConn
     FakeResult.new(@responder.call(sql, params))
   end
 
+  def exec(sql)
+    exec_params(sql)
+  end
+
+  # COPY support: the lines of each COPY are collected in copies[sql].
+  def copies
+    @copies ||= Hash.new { |h, k| h[k] = [] }
+  end
+
+  def copy_data(sql)
+    @copy_sql = sql
+    yield
+    @copy_sql = nil
+  end
+
+  def put_copy_data(line)
+    copies[@copy_sql] << line
+  end
+
   def transaction
     yield self
   end

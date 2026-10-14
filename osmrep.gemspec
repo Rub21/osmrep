@@ -18,6 +18,7 @@ Gem::Specification.new do |spec|
   spec.executables = ["osmrep"]
 
   spec.add_dependency "builder", "~> 3.2"
+  spec.add_dependency "nokogiri", "~> 1.16"
   spec.add_dependency "pg", "~> 1.5"
   spec.metadata["rubygems_mfa_required"] = "true"
 end

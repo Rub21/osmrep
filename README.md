@@ -94,6 +94,31 @@ knows where to continue. `.osm.bz2` like the planet and notes dumps, with
 `pbzip2` when installed. md5, `latest` link and the copy to S3 are the job of
 the script that calls it, like `planet-notes-dump`.
 
+## Consumer: load the data into your own PostGIS
+
+`osmrep gpx import FILE --target postgres://...` reads a dump, or one
+replication file, and writes it into a PostGIS database:
+
+```
+traces(id, visibility, uid, "user", "timestamp", name, description, points, lat, lon)
+trace_tags(gpx_id, tag)
+trace_segments(gpx_id, trackid, geom geometry(GeometryZM, 4326))   -- one per <trkseg>, Z altitude, M time
+replication_state(sequence, "timestamp")
+```
+
+The tables are created when missing. Each trace in the file replaces its rows,
+a header only trace (deleted, or no longer served) removes them, so applying
+the same file twice gives the same result. After a dump the
+`replication_sequence` of the dump is stored in `replication_state`, that is
+where the feed continues. The target can also be `target:` in the config or
+`$OSMREP_TARGET`.
+
+`osmrep gpx update --url https://planet.openstreetmap.org/replication/gpx/ --target ...`
+reads the sequence stored in the target, fetches `state.txt` of the feed and
+applies every newer file, one transaction per file, storing the sequence after
+each one. Run it from a cron or a loop. Without a dump, `--start SEQUENCE` says
+where to begin.
+
 ## Why Ruby
 
 - The volume is small. A run writes a few thousand points, the worst case
