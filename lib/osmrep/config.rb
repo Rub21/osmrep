@@ -7,7 +7,7 @@ module Osmrep
   class Config
     DEFAULT_LIMIT = 10_000
 
-    attr_reader :database
+    attr_reader :database, :target, :feed_url
 
     def self.load(path)
       data = path && File.exist?(path) ? YAML.safe_load_file(path) || {} : {}
@@ -17,9 +17,17 @@ module Osmrep
     def initialize(data = {})
       @data = data
       @database = ENV.fetch("OSMREP_DATABASE", data["database"])
+      # The consumer database, for import and update.
+      @target = ENV.fetch("OSMREP_TARGET", data["target"])
+      # The feed the consumer follows with update.
+      @feed_url = ENV.fetch("OSMREP_FEED_URL", data["feed_url"])
       @data_dir = ENV.fetch("OSMREP_DATA_DIR", data["data_dir"])
       @sources = data.fetch("sources", nil) || {}
+    end
 
+    # The producer commands (replicate, dump) need the source database and
+    # the data directory. The consumer commands (import, update) do not.
+    def require_producer!
       raise Error, "database is not set" if @database.nil? || @database.empty?
       raise Error, "data_dir is not set" if @data_dir.nil? || @data_dir.empty?
     end

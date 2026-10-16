@@ -14,6 +14,8 @@ require_relative "osmrep/replication_dir"
 require_relative "osmrep/s3_upload"
 require_relative "osmrep/replicator"
 require_relative "osmrep/dumper"
+require_relative "osmrep/importer"
+require_relative "osmrep/updater"
 require_relative "osmrep/sources"
 require_relative "osmrep/cli"
 

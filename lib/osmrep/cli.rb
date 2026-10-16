@@ -12,29 +12,39 @@ module Osmrep
       Sources:  #{Sources.names.join(', ')}
       Commands: replicate   write one replication file with the pending rows
                 dump        write a full dump of the source
+                import FILE load a dump or a replication file into the target database
+                update      apply the new files of a feed (--url) to the target database
 
       Options:
     TEXT
 
     def initialize(argv)
       @argv = argv
-      @options = { :config => ENV.fetch("OSMREP_CONFIG", "config.yaml"), :output => nil, :quiet => false }
+      @options = { :config => ENV.fetch("OSMREP_CONFIG", "config.yaml"), :output => nil, :target => nil, :url => nil, :start => nil, :quiet => false }
     end
 
     def run
       parser.parse!(@argv)
-      source_name, command = @argv
-      return usage unless source_name && command
+      source_name, command, file = @argv
+      return usage unless source_name && command && (command != "import" || file)
 
-      config = Config.load(@options[:config])
-      source = Sources.build(source_name, config)
-      execute(command, config, source)
+      dispatch(source_name, command, file, Config.load(@options[:config]))
     rescue Error, PG::Error => e
       warn "osmrep: #{e.message}"
       1
     end
 
     private
+
+    def dispatch(source_name, command, file, config)
+      case command
+      when "import" then import(file, config)
+      when "update" then update(config)
+      else
+        config.require_producer!
+        execute(command, config, Sources.build(source_name, config))
+      end
+    end
 
     def execute(command, config, source)
       dir = ReplicationDir.new(config.data_dir(source.name))
@@ -61,12 +71,36 @@ module Osmrep
         o.banner = USAGE
         o.on("-c", "--config PATH", "config file (default: config.yaml or $OSMREP_CONFIG)") { |v| @options[:config] = v }
         o.on("-o", "--output PATH", "output file for dump, .bz2, .gz or plain XML by extension") { |v| @options[:output] = v }
+        o.on("-t", "--target URL", "consumer database for import and update (default: target in the config or $OSMREP_TARGET)") { |v| @options[:target] = v }
+        o.on("-u", "--url URL", "feed for update, the directory with state.txt (default: feed_url in the config or $OSMREP_FEED_URL)") do |v|
+          @options[:url] = v
+        end
+        o.on("-s", "--start SEQUENCE", Integer, "update: sequence after which to begin when the target has no state yet") { |v| @options[:start] = v }
         o.on("-q", "--quiet", "no log output") { @options[:quiet] = true }
         o.on("-v", "--version") do
           puts Osmrep::VERSION
           exit 0
         end
       end
+    end
+
+    def import(file, config)
+      with_target(config) { |conn, logger| Importer.new(conn, :logger => logger).run(file) }
+    end
+
+    def update(config)
+      url = @options[:url] || config.feed_url or raise Error, "feed url is not set (--url, OSMREP_FEED_URL or feed_url in the config)"
+      with_target(config) { |conn, logger| Updater.new(conn, :url => url, :logger => logger).run(:start => @options[:start]) }
+    end
+
+    def with_target(config)
+      target = @options[:target] || config.target or raise Error, "target is not set (--target, OSMREP_TARGET or target in the config)"
+      logger = @options[:quiet] ? nil : Logger.new($stderr)
+      conn = PG.connect(target)
+      yield conn, logger
+      0
+    ensure
+      conn&.close
     end
 
     def s3_upload(config, name, logger)
