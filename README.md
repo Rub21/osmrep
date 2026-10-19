@@ -67,12 +67,20 @@ file that is sorted and written at the end.
 
 ## Why Ruby
 
-- The feed is small: a few thousand points per minute.
-- The dump reads a `pg_dump` file; `pg_restore`, `sort` and `bzip2` do the
-  heavy work. Ruby decodes the points in worker processes. If that is too slow
-  on the full table, `Dump::Worker` can be replaced by a small compiled
-  program while the rest stays in Ruby.
-- openstreetmap-website is Ruby, so the same people can maintain this.
+- The minute feed is small. Fewer than one trace per minute is uploaded, so a run
+  writes a few thousand points. After a bulk visibility change it can be a
+  few million, and the `limit` splits them over several runs. There is no
+  performance reason for a compiled language here.
+- The dump reads a `pg_dump` file. The reading, sorting and compression
+  are C programs and libraries: `pg_restore` with zlib, `sort`, `bzip2` and
+  SQLite for the trace lookups. Ruby only turns each point into a
+  `<trkpt>` line, split over `--jobs`. If the full table needs more speed, only
+  that step (`Dump::Worker`) has to be rewritten in a compiled language. The
+  rest of the tool does not change.
+- It matches the stack. openstreetmap-website and the changesets replication
+  are Ruby, so the people who maintain them can maintain this too.
+- The current GPS tools are C code without an active maintainer. A rewrite in
+  C++ would repeat that problem.
 
 ## Development
 
