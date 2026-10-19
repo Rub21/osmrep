@@ -2,6 +2,7 @@
 
 require "minitest/autorun"
 require "tmpdir"
+require "nokogiri"
 require_relative "../lib/osmrep"
 
 # A stand-in for PG::Connection. Each query gets its rows from a block that

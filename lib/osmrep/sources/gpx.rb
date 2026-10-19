@@ -13,6 +13,8 @@ module Osmrep
     # PostGIS. Every other trace is only a header with id, visible and
     # visibility, so a consumer can drop a trace that is no longer served.
     # A deleted trace keeps its row with visible="false".
+    #
+    # The full dump has the same format but reads a pg_dump file, see Dump.
     class Gpx
       TABLE = "gpx_files"
       COLUMNS = "id, user_id, visible, visibility, inserted, name, description, size, latitude, longitude, timestamp"

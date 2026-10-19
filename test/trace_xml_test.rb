@@ -2,8 +2,8 @@
 
 require "test_helper"
 
-# trkpt must give the same text as SEGMENTS_SQL, these are the SQL results
-# for the same values.
+# The dump formats the points in Ruby, the feed in SQL (SEGMENTS_SQL). Both
+# must give the same text, these are the SQL results for the same values.
 class TraceXmlTest < Minitest::Test
   def test_trkpt_has_seven_decimals_ele_and_time
     assert_equal '        <trkpt lat="-12.0500000" lon="-77.0400000"><ele>10.5</ele><time>2026-10-16T08:00:00Z</time></trkpt>',

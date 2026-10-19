@@ -2,8 +2,8 @@
 
 module Osmrep
   module Sources
-    # The XML of one trace. The feed formats the <trkpt> lines in SQL
-    # (Gpx::SEGMENTS_SQL); trkpt here gives the same text.
+    # The XML of one trace, shared by the feed and the dump. The feed formats
+    # the <trkpt> lines in SQL (Gpx::SEGMENTS_SQL), the dump with trkpt here.
     module TraceXml
       INDENT = "        "
 
