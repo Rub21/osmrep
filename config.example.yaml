@@ -1,0 +1,24 @@
+# Connection string for the OSM database. The user needs SELECT on the
+# tables of each source and UPDATE on the replicated column.
+database: postgres://openstreetmap:password@localhost/openstreetmap
+
+# Base directory for the replication files. Each source writes into its own
+# subdirectory, for example <data_dir>/gpx/000/000/001.osm.gz
+data_dir: /var/lib/osmrep
+
+# Optional: copy each new file to S3 with the aws command line, like the
+# other OSM replication feeds do. Leave s3_dir out to keep the files on disk only.
+aws_profile: osm-pds-upload
+aws_cli: /opt/awscli/v2/current/bin/aws
+
+# Settings for one source.
+sources:
+  gpx:
+    # Maximum number of rows per replication file. When more rows are
+    # pending, the rest goes into the next run. Default 10000.
+    limit: 100
+    # Visibilities whose points go into the feed and the dump. Identifiable
+    # traces also carry user, date, name and tags; trackable only the points.
+    # Private and public traces never carry content. Default: both.
+    content_visibilities: [identifiable, trackable]
+    s3_dir: s3://osm-planet-eu-central-1/gpx/replication/minute
