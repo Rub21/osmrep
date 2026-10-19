@@ -15,6 +15,8 @@ module Osmrep
       EXT = ".bz2"
       SORT = ["sort", "-t", "\t", "-k1,1n", "-k2,2n", "-k3,3n"].freeze
       BUFFER_LIMIT = 1 << 30
+      F_SETPIPE_SZ = 1031 # Linux fcntl command, not in Ruby's Fcntl module
+      PIPE_SIZE = 1 << 20
 
       attr_reader :input, :jobs, :logger
 
@@ -50,13 +52,24 @@ module Osmrep
       end
 
       # Opens a file for writing, one bzip2 stream.
-      def self.compress_to(path, &block)
+      def self.compress_to(path)
         File.open(path, "wb") do |file|
-          IO.popen(%w[bzip2 -c], "w", :out => file, &block)
+          IO.popen(%w[bzip2 -c], "w", :out => file) { |stdin| yield widen(stdin) }
         end
         raise Error, "bzip2 failed" unless $?.success? # rubocop:disable Style/SpecialGlobalVars
 
         path
+      end
+
+      # Pipe buffer of 1 MB instead of the 64 KB default, so each process in
+      # the chain pg_restore -> reader -> worker -> bzip2 can run ahead of
+      # the next one instead of waiting for it. 1 MB is the Linux limit for
+      # a normal user. Linux only; elsewhere the pipe keeps its default size.
+      def self.widen(pipe)
+        pipe.fcntl(F_SETPIPE_SZ, PIPE_SIZE)
+        pipe
+      rescue SystemCallError, NotImplementedError
+        pipe
       end
 
       private
@@ -187,6 +200,7 @@ module Osmrep
           @part = File.join(work, "#{name}#{EXT}")
           @counts_path = File.join(work, "#{name}.counts")
           reader, @writer = IO.pipe
+          Runner.widen(@writer)
           @pid = fork do
             # The pipes of the other workers, or they never see their end of input.
             @writer.close

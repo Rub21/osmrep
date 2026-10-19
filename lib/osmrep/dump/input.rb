@@ -23,7 +23,7 @@ module Osmrep
         commands = [@custom ? ["pg_restore", "-f", "-", "--data-only", "--table", table, path] : ["cat", path]]
         commands << %w[cut -f1] if ids_only
         Open3.pipeline_r(*commands) do |io, threads|
-          result = yield io
+          result = yield Runner.widen(io)
           io.close
           failed = threads.find { |t| !t.value.success? }
           raise Error, "#{commands[threads.index(failed)].first} failed on #{path}" if failed
